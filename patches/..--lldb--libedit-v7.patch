@@ -1,0 +1,87 @@
+From c3ab7b067a4ac2d823157ce84474d72fb5d74381 Mon Sep 17 00:00:00 2001
+From: Luc Hermitte <luc.hermitte@cnes.fr>
+Date: Fri, 4 Jan 2019 18:15:19 +0000
+Subject: [PATCH] Support when libedit isn't in system directories
+
+LLDB7 has improved its support for non-system installation of
+libedit, yet this is not enough:
+- There are still references to `edit` library
+- Use of libedit isn't properly encapsulated in the libedit
+module
+---
+ include/lldb/Host/Editline.h    | 4 ++--
+ source/Host/CMakeLists.txt      | 3 ++-
+ source/Host/common/Editline.cpp | 6 ++++++
+ source/Utility/CMakeLists.txt   | 2 +-
+ 4 files changed, 11 insertions(+), 4 deletions(-)
+
+diff --git a/include/lldb/Host/Editline.h b/include/lldb/Host/Editline.h
+index beb96e7..6b529c7 100644
+--- a/include/lldb/Host/Editline.h
++++ b/include/lldb/Host/Editline.h
+@@ -44,9 +44,9 @@
+ #include "lldb/lldb-private.h"
+ 
+ #if defined(_WIN32)
+-#include "lldb/Host/windows/editlinewin.h"
++struct EditLine;
+ #elif !defined(__ANDROID__)
+-#include <histedit.h>
++typedef struct editline EditLine;
+ #endif
+ 
+ #include <mutex>
+diff --git a/source/Host/CMakeLists.txt b/source/Host/CMakeLists.txt
+index 5a92447..b7ec83c 100644
+--- a/source/Host/CMakeLists.txt
++++ b/source/Host/CMakeLists.txt
+@@ -55,6 +55,7 @@ if (NOT LLDB_DISABLE_LIBEDIT)
+   add_host_subdirectory(common
+     common/Editline.cpp
+     )
++  include_directories(${libedit_INCLUDE_DIRS})
+ endif()
+ 
+ add_host_subdirectory(posix
+@@ -156,7 +157,7 @@ if (HAVE_LIBDL)
+   list(APPEND EXTRA_LIBS ${CMAKE_DL_LIBS})
+ endif()
+ if (NOT LLDB_DISABLE_LIBEDIT)
+-  list(APPEND EXTRA_LIBS edit)
++  list(APPEND EXTRA_LIBS ${libedit_LIBRARIES})
+ endif()
+ 
+ add_lldb_library(lldbHost
+diff --git a/source/Host/common/Editline.cpp b/source/Host/common/Editline.cpp
+index 329c0c1..bb3e66a 100644
+--- a/source/Host/common/Editline.cpp
++++ b/source/Host/common/Editline.cpp
+@@ -11,6 +11,12 @@
+ #include <iostream>
+ #include <limits.h>
+ 
++#if defined(_WIN32)
++#include "lldb/Host/windows/editlinewin.h"
++#elif !defined(__ANDROID__)
++#include <histedit.h>
++#endif
++
+ #include "lldb/Host/ConnectionFileDescriptor.h"
+ #include "lldb/Host/Editline.h"
+ #include "lldb/Host/Host.h"
+diff --git a/source/Utility/CMakeLists.txt b/source/Utility/CMakeLists.txt
+index 91f3c87..ee81c0a 100644
+--- a/source/Utility/CMakeLists.txt
++++ b/source/Utility/CMakeLists.txt
+@@ -9,7 +9,7 @@ if ( CMAKE_SYSTEM_NAME MATCHES "Windows" )
+ endif ()
+ 
+ if (NOT LLDB_DISABLE_LIBEDIT)
+-  list(APPEND LLDB_SYSTEM_LIBS edit)
++  list(APPEND LLDB_SYSTEM_LIBS ${libedit_LIBRARIES})
+ endif()
+ if (NOT LLDB_DISABLE_CURSES)
+   list(APPEND LLDB_SYSTEM_LIBS ${CURSES_LIBRARIES})
+-- 
+1.8.3.1
+
