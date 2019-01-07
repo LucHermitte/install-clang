@@ -247,7 +247,21 @@ mkdir -p "${libcxx_include}" || { \
     exit 1
 }
 
-function _exec() # {{{2
+# _is_set                           {{{2
+function _is_set()
+{
+    # [[ -v $1 ]] # with bash 4.2+, work with empty arrays
+    [[ -n ${!1+x} ]] # doesn't work with empty arrays
+}
+
+# _is_true                          {{{2
+function _is_true()
+{
+    _is_set $1 && [[ $1 -eq 1 ]]
+}
+
+# _exec                             {{{2
+function _exec()
 {
     printf "'%s' " "$@"
     printf "\n"
@@ -267,6 +281,21 @@ function _join_by()
     local d=$1; shift; echo -n "$1"; shift; printf "%s" "${@/#/$d}";
 }
 # ----
+
+# _filter_array                     {{{2
+# remove all occurrences of pattern from array elements
+# $1:  pattern
+# $2+: array to filter
+function _filter_array()
+{
+    declare -a res
+    local pat=$1
+    shift
+    for e in "$@"; do
+        [[ "${e}" =~ "${pat}" ]] && res+=("$e")
+    done
+    echo "${res[@]}"
+}
 
 function st # {{{2
 {
@@ -423,7 +452,18 @@ if [ "${perform_clone}" == "1" ]; then
     done
 
     # Apply any patches we might need.
-    for i in "$(find "${patches}" -type f)"; do
+    patch_list=($(find "${patches}" -type f -name "*.patch"))
+    # - first determine the current release version to filter out
+    # invalid patches
+    ver_number="${release/release_/}"
+    ver_number="${ver_number:0:1}"
+    [[ ${ver_number:0:1} =~ [0-9] ]] && is_a_digit_number=1 || is_a_digit_number=0
+    if _is_true ${is_a_digit_number} ; then
+        echo "Keeping patches matching '-v${ver_number}'"
+        patch_list=( $(_filter_array "-v${ver_number}" "${patch_list[@]}") )
+    fi
+    # - then apply
+    for i in "${patch_list[@]}"; do
         _exec apply_patch $i
     done
 
