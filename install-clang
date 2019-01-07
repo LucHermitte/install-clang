@@ -543,6 +543,11 @@ LD_LIBRARY_PATH_save="${LD_LIBRARY_PATH}"
 
 for stage in 0 1 2; do
     if [ "$(st perform)" == "0" ]; then
+        # Force $LD_LIBRARY_PATH to see to libc++ even if the stage is
+        # skipped -- we suppose a skipped stage as already been
+        # performed.
+        st_prefix="$(st INSTALL_PREFIX)"
+        export LD_LIBRARY_PATH="${LD_LIBRARY_PATH_save}:${st_prefix}/lib"
         continue
     fi
 
@@ -607,8 +612,8 @@ EOF
         echo ===
         exit 1
     fi
+    # Force $LD_LIBRARY_PATH to see to libc++ for the next stage.
     st_prefix="$(st INSTALL_PREFIX)"
-    # Des fois que ... pour la suite!
     export LD_LIBRARY_PATH="${LD_LIBRARY_PATH_save}:${st_prefix}/lib"
 
     echo "Default Config"
