@@ -313,7 +313,7 @@ function apply_patch # {{{2
         _exec cd "${dir}"
     fi
 
-    _exec git am -3 < "${patch}"
+    _exec git am --reject < "${patch}"
 }
 
 #### Clone reposistories. {{{1
