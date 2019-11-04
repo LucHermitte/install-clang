@@ -565,11 +565,13 @@ other_settings_stage2+=("-DLLVM_USE_INTEL_JITEVENTS=ON")
 # Never generate these tools in the intermediary stages, even if we want
 # them installed in the end.
 
-project_list=()
-test ${perform_lldb_build}  -eq 1 && project_list+=('lldb')
-test ${perform_lld_build}   -eq 1 && project_list+=('lld')
-projects="$(_join_by ';' "${project_list[@]}")"
-test "${projects}"          != "" && other_settings_stage2+=("-DLLVM_ENABLE_PROJECTS=${projects}" )
+# As of LLVM 9 (/8?), this approach is no longer compatible with clang
+# installation
+## project_list=()
+## test ${perform_lldb_build}  -eq 1 && project_list+=('lldb')
+## test ${perform_lld_build}   -eq 1 && project_list+=('lld')
+## projects="$(_join_by ';' "${project_list[@]}")"
+## test "${projects}"          != "" && other_settings_stage2+=("-DLLVM_ENABLE_PROJECTS=${projects}" )
 
 #### Compile the stages. {{{1
 
@@ -610,10 +612,10 @@ EOF
         # Unfortunatelly we can't use LLVM_ENABLE_PROJECTS as it only work with
         # a limited set of projects => we need to make it visible in the right
         # directory at the right moment.
-        if [ ${perform_omp_build} -eq 1 ] ; then
-            _exec cd "${src}/projects"
-            [ ! -d "openmp" ] && _exec ln -s "${src_omp}" .
-        fi
+        _exec cd "${src}/projects"
+        [ ${perform_omp_build}  -eq 0 ] || [ -d "openmp" ] || _exec ln -s "${src_omp}" .
+        [ ${perform_lld_build}  -eq 0 ] || [ -d "lld"    ] || _exec ln -s "${src_lld}" .
+        [ ${perform_lldb_build} -eq 0 ] || [ -d "lldb"   ] || _exec ln -s "${src_lldb}" .
     fi
 
     echo ===
@@ -627,6 +629,11 @@ EOF
      ( _exec cd "${src}" &&                                               \
        _exec mkdir -p "build-stage${stage}" &&                            \
        _exec cd "build-stage${stage}" &&                                  \
+       printf "CC='%s'\n" "$(st CC)" &&                                   \
+       printf "CXX='%s'\n" "$(st CXX)" &&                                 \
+       printf "CFLAGS='%s'\n" "$(st CFLAGS)" &&                           \
+       printf "CXXFLAGS='%s'\n" "$(st CXXFLAGS)" &&                       \
+       printf "LDFLAGS='%s'\n" "$(st LDFLAGS)${addl_ldflags}" &&          \
        CC="$(st CC)"                                                      \
        CXX="$(st CXX)"                                                    \
        CFLAGS="$(st CFLAGS)"                                              \
