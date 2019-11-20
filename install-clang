@@ -16,6 +16,7 @@
 # - perform_lld_build       : If 1, attempt to build LLD.
 # - perform_omp_build       : If 1, attempt to build OpenMP.
 # - perform_extra_build     : If 1, attempt to build clang-extra tools.
+# - install_pybindings      : If 1, install Python bindings
 # non-standard installation.
 #
 # TODO:
@@ -80,6 +81,7 @@ perform_lldb_build=${perform_lldb_build:-0}   # If 1, attempt to build LLDB.
 perform_lld_build=${perform_lld_build:-0}     # If 1, attempt to build LLD.
 perform_omp_build=${perform_omp_build:-0}     # If 1, attempt to build OpenMP.
 perform_extra_build=${perform_extra_build:-0} # If 1, attempt to build clang-extra tools.
+install_pybindings=${install_pybindings:-1}   # If 1, install Python bindings
 perform_cleanup=0                             # If 1, delete all source and build directories.
 assertions=off                                # If "on", enable LLVM assertions.
 parallelism=4                                 # The value X to pass to make -j X to build in parallel.
@@ -582,6 +584,7 @@ echo ""
 echo "Changing directory to ${src} ..."
 cd "${src}"
 LD_LIBRARY_PATH_save="${LD_LIBRARY_PATH}"
+extra_targets=()
 
 for stage in 0 1 2; do
     if [ "$(st perform)" == "0" ]; then
@@ -592,6 +595,14 @@ for stage in 0 1 2; do
         export LD_LIBRARY_PATH="${LD_LIBRARY_PATH_save}:${st_prefix}/lib"
         continue
     fi
+
+    echo ===
+    echo === Building LLVM/clang, stage ${stage} ...
+    echo ===
+
+    other_settings_name="$(actual other_settings)"
+    echo "other_settings_name: ${other_settings_name}"
+    eval other_settings=( '"${'${other_settings_name}'[@]}"')
 
     if [ ${stage} -eq 2 ] ; then
         [ -f "${INSTALL_PREFIX_stage1}/bin/clang++w" ] && rm "${INSTALL_PREFIX_stage1}/bin/clang++w"
@@ -616,15 +627,12 @@ EOF
         [ ${perform_omp_build}  -eq 0 ] || [ -d "openmp" ] || _exec ln -s "${src_omp}" .
         [ ${perform_lld_build}  -eq 0 ] || [ -d "lld"    ] || _exec ln -s "${src_lld}" .
         [ ${perform_lldb_build} -eq 0 ] || [ -d "lldb"   ] || _exec ln -s "${src_lldb}" .
+        if [ ${install_pybindings} -eq 1 ] ; then
+            python_version=$(python --version | sed 's#^.* ##')
+            extra_targets+=("install-libclang-python-bindings")
+            other_settings+=("-DCLANG_PYTHON_BINDINGS_VERSIONS=${python_version}")
+        fi
     fi
-
-    echo ===
-    echo === Building LLVM/clang, stage ${stage} ...
-    echo ===
-
-    other_settings_name="$(actual other_settings)"
-    echo "other_settings_name: ${other_settings_name}"
-    eval other_settings=( '"${'${other_settings_name}'[@]}"')
 
      ( _exec cd "${src}" &&                                               \
        _exec mkdir -p "build-stage${stage}" &&                            \
@@ -650,7 +658,7 @@ EOF
              .. &&                                                        \
        _exec make -j ${parallelism} &&                                    \
        _exec make -j ${parallelism} stage2 &&                             \
-       _exec make install                                                 \
+       _exec make install "${extra_targets[@]}"                           \
      )
 
     if [ "$?" != "0" ] ; then
