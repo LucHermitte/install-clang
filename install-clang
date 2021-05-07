@@ -369,77 +369,15 @@ if [ "${perform_clone}" == "1" ]; then
         echo "Changing directory to $(dirname ${src}) for installing  ..."
         cd "$(dirname "${src}")"
 
-        git clone https://github.com/llvm-mirror/llvm.git $(basename ${src})
-
-        ( cd "${src}/tools" && git clone https://github.com/llvm-mirror/clang.git )
-        ( cd "${src}/projects" && git clone https://github.com/llvm-mirror/libcxx )
-        ( cd "${src}/projects" && git clone https://github.com/llvm-mirror/compiler-rt )
-
-        ( cd "${src}" && git checkout -q ${version_llvm} )
-        ( cd "${src}/tools/clang" && git checkout -q ${version_clang}  )
-        ( cd "${src_libcxx}" && git checkout -q ${version_libcxx} )
-        ( cd "${src_compilerrt}" && git checkout -q ${version_compilerrt} )
-
-        ( cd "${src}/projects" && git clone https://github.com/llvm-mirror/libcxxabi )
-        ( cd "${src_libcxxabi}" && git checkout -q ${version_libcxxabi} )
-
-        if [ "${perform_extra_build}" == "1" ]; then
-            ( cd "${src}/tools/clang/tools" && git clone https://github.com/llvm-mirror/clang-tools-extra.git extra )
-            ( cd "${src}/tools/clang/tools/extra" && git checkout -q ${version_extra} )
-        fi
-
-        if [ "${perform_lldb_build}" == "1" ]; then
-            ( cd "$(dirname "${src_lldb}")" && git clone https://github.com/llvm-mirror/lldb "$(basename "${src_lldb}")")
-            ( cd "${src_lldb}" && git checkout -q ${version_lldb}  )
-        fi
-
-        if [ "${perform_lld_build}" == "1" ]; then
-            ( cd "$(dirname "${src_lld}")" && git clone https://github.com/llvm-mirror/lld "$(basename "${src_lld}")")
-            ( cd "${src_lld}" && git checkout -q ${version_lld}  )
-        fi
-
-        if [ "${perform_omp_build}" == "1" ]; then
-            ( cd "$(dirname "${src_omp}")" && git clone https://github.com/llvm-mirror/openmp "$(basename "${src_omp}")")
-            ( cd "${src_omp}" && git checkout -q ${version_omp}  )
-        fi
+        git clone --depth=1 https://github.com/llvm/llvm-project.git $(basename ${src})
+        (cd "${src}" && git checkout -q ${release})
 
     else
         echo Changing directory to $(dirname ${src}) for updating ...
         cd $(dirname ${src})
 
         ( cd "${src}" && git pull --rebase )
-        ( cd "${src}/tools/clang" && git pull --rebase )
-        ( cd "${src_libcxx}" && git pull --rebase )
-        ( cd "${src_compilerrt}" && git pull --rebase )
-
         ( cd "${src}" && git checkout -q ${version_llvm} )
-        ( cd "${src}/tools/clang" && git checkout -q ${version_clang}  )
-        ( cd "${src_libcxx}" && git checkout -q ${version_libcxx} )
-        ( cd "${src_compilerrt}" && git checkout -q ${version_compilerrt} )
-
-        ( cd "${src_libcxxabi}" && git pull --rebase )
-        ( cd "${src_libcxxabi}" && git checkout -q ${version_libcxxabi} )
-
-        if [ "${perform_extra_build}" == "1" ]; then
-            # TODO: move somewhere it won't be build automatically
-            ( cd "${src}/tools/clang/tools/extra" && git pull --rebase )
-            ( cd "${src}/tools/clang/tools/extra" && git checkout -q ${version_extra} )
-        fi
-
-        if [ "${perform_lldb_build}" == "1" ]; then
-            ( cd "${src_lldb}" && git pull --rebase )
-            ( cd "${src_lldb}" && git checkout -q ${version_lldb}  )
-        fi
-
-        if [ "${perform_lld_build}" == "1" ]; then
-            ( cd "${src_lld}" && git pull --rebase )
-            ( cd "${src_lld}" && git checkout -q ${version_lld}  )
-        fi
-
-        if [ "${perform_omp_build}" == "1" ]; then
-            ( cd "${src_omp}" && git pull --rebase )
-            ( cd "${src_omp}" && git checkout -q ${version_omp}  )
-        fi
     fi
 
     # Cherry pick additional commits from master.
@@ -586,6 +524,8 @@ cd "${src}"
 LD_LIBRARY_PATH_save="${LD_LIBRARY_PATH}"
 extra_targets=()
 
+ENABLE_PROJECTS=(clang compiler-rt libcxx libcxxabi)
+
 for stage in 0 1 2; do
     if [ "$(st perform)" == "0" ]; then
         # Force $LD_LIBRARY_PATH to see to libc++ even if the stage is
@@ -614,23 +554,31 @@ MYLFLAGS="-nodefaultlibs -lc++ -lc++abi -lm -lc -lgcc_s -lgcc"
 # Catch the case when we only want to compile; this helps us avoid some warnings:
 if echo "\$@" | egrep "(^-c | -c | -c$)" >/dev/null 2>&1; then
     MYLFLAGS=""
+elif echo "\$@" | egrep "(^-pthread | -pthread | -pthread$)" >/dev/null 2>&1; then
+    MYLFLAGS="${MYLFLAGS} -lpthread"
 fi
 # Use -stdlib=libc++ w/ clang built from source; otherwise use -I/usr/local/include/c++/v1
 "\${STAGED_PREFIX}/bin/clang++" -stdlib=libc++ "\$@" \${MYLFLAGS}
 EOF
         chmod +x "${INSTALL_PREFIX_stage1}/bin/clang++w"
         # Register OpenMP project to the list to build.
-        # Unfortunatelly we can't use LLVM_ENABLE_PROJECTS as it only work with
-        # a limited set of projects => we need to make it visible in the right
-        # directory at the right moment.
-        _exec cd "${src}/projects"
-        [ ${perform_omp_build}  -eq 0 ] || [ -d "openmp" ] || _exec ln -s "${src_omp}" .
-        [ ${perform_lld_build}  -eq 0 ] || [ -d "lld"    ] || _exec ln -s "${src_lld}" .
-        [ ${perform_lldb_build} -eq 0 ] || [ -d "lldb"   ] || _exec ln -s "${src_lldb}" .
+        ## Unfortunatelly we can't use LLVM_ENABLE_PROJECTS as it only work with
+        ## a limited set of projects => we need to make it visible in the right
+        ## directory at the right moment.
+        # _exec cd "${src}/projects"
+        # [ ${perform_omp_build}  -eq 0 ] || [ -d "openmp" ] || _exec ln -s "${src_omp}" .
+        # [ ${perform_lld_build}  -eq 0 ] || [ -d "lld"    ] || _exec ln -s "${src_lld}" .
+        # [ ${perform_lldb_build} -eq 0 ] || [ -d "lldb"   ] || _exec ln -s "${src_lldb}" .
+        ENABLE_PROJECTS+=(parallel-libs pstl)
+        [ ${perform_omp_build}   -eq 0 ] || [ -d "openmp" ]            || ENABLE_PROJECTS+=(openmp)
+        [ ${perform_lld_build}   -eq 0 ] || [ -d "lld"    ]            || ENABLE_PROJECTS+=(lld)
+        [ ${perform_lldb_build}  -eq 0 ] || [ -d "lldb"   ]            || ENABLE_PROJECTS+=(lldb)
+        [ ${perform_extra_build} -eq 0 ] || [ -d "clang-tools-extra" ] || ENABLE_PROJECTS+=(clang-tools-extra)
         if [ ${install_pybindings} -eq 1 ] ; then
-            python_version=$(python --version | sed 's#^.* ##')
+            # python_version=$(python --version | sed 's#^.* ##')
+            # other_settings+=("-DCLANG_PYTHON_BINDINGS_VERSIONS=${python_version}")
+            other_settings+=("-DCLANG_PYTHON_BINDINGS_VERSIONS='2;3'")
             extra_targets+=("install-libclang-python-bindings")
-            other_settings+=("-DCLANG_PYTHON_BINDINGS_VERSIONS=${python_version}")
         fi
     fi
 
@@ -652,6 +600,7 @@ EOF
              -DCMAKE_CXX_FLAGS="$(st CXXFLAGS)"                           \
              -DCMAKE_INSTALL_PREFIX="$(st INSTALL_PREFIX)"                \
              -DC_INCLUDE_DIRS="${default_includes}$(st default_includes)" \
+             -DLLVM_ENABLE_PROJECTS="$(_join_by ';' ${ENABLE_PROJECTS[@]})"    \
              "${other_settings[@]}"                                       \
              ${addl_cmake}                                                \
              $(st CMAKE)                                                  \
