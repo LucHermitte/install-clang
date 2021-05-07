@@ -595,7 +595,7 @@ EOF
        CFLAGS="$(st CFLAGS)"                                              \
        CXXFLAGS="$(st CXXFLAGS)"                                          \
        LDFLAGS="$(st LDFLAGS)${addl_ldflags}"                             \
-       _exec cmake -DCMAKE_BUILD_TYPE="$(st BUILD_TYPE)"                  \
+       _exec cmake -G Ninja -DCMAKE_BUILD_TYPE="$(st BUILD_TYPE)"         \
              -DLLVM_REQUIRES_RTTI=1                                       \
              -DCMAKE_CXX_FLAGS="$(st CXXFLAGS)"                           \
              -DCMAKE_INSTALL_PREFIX="$(st INSTALL_PREFIX)"                \
@@ -604,10 +604,9 @@ EOF
              "${other_settings[@]}"                                       \
              ${addl_cmake}                                                \
              $(st CMAKE)                                                  \
-             .. &&                                                        \
-       _exec make -j ${parallelism} &&                                    \
-       _exec make -j ${parallelism} stage2 &&                             \
-       _exec make install "${extra_targets[@]}"                           \
+             -S ../llvm &&                                                \
+       _exec cmake --build .   &&                                         \
+       _exec cmake --build . --target install "${extra_targets[@]}"                       \
      )
 
     if [ "$?" != "0" ] ; then
